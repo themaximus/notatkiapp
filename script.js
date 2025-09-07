@@ -576,7 +576,7 @@
     
     // --- [REVISED] GRAPH VIEW LOGIC ---
 
-    const ANCHOR_RADIUS = 7;
+    const ANCHOR_RADIUS = 8;
     const NODE_PADDING_X = 15; 
     const NODE_PADDING_Y = 15; 
     const FONT_STYLE = '16px Segoe UI';
@@ -649,66 +649,6 @@
         };
     }
 
-    function drawNodeWithAnchors(ctx, x, y, selected, hover, values) {
-        const { width, height } = values; 
-        const style = values;
-        const label = values.label;
-        const img = imageCache[values.id];
-        
-        ctx.fillStyle = selected ? style.color.highlight.background : (hover ? style.color.hover.background : style.color.background);
-        ctx.strokeStyle = selected ? style.color.highlight.border : (hover ? style.color.hover.border : style.color.border);
-        ctx.lineWidth = selected || hover ? (style.borderWidthSelected || 3) : (style.borderWidth || 2);
-        
-        vis.util.drawRoundRect(ctx, x - width / 2, y - height / 2, width, height, style.shapeProperties.borderRadius);
-        ctx.fill();
-        ctx.stroke();
-
-        const lines = label.split('\n');
-        const textLineHeight = parseInt(FONT_STYLE) * LINE_HEIGHT;
-        const totalTextHeight = lines.length * textLineHeight;
-        const imagePadding = 8;
-
-        let currentContentY = y - height / 2 + NODE_PADDING_Y;
-
-        if (img && img.complete && img.naturalWidth > 0) {
-            const scale = Math.min((width - NODE_PADDING_X * 2) / img.naturalWidth, MAX_IMG_HEIGHT / img.naturalHeight);
-            const imgWidth = img.naturalWidth * scale;
-            const imgHeight = img.naturalHeight * scale;
-            
-            ctx.drawImage(img, x - imgWidth / 2, currentContentY, imgWidth, imgHeight);
-            currentContentY += imgHeight + imagePadding; 
-        }
-
-        ctx.font = FONT_STYLE;
-        ctx.fillStyle = style.font.color;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        
-        let textYStart = currentContentY + (totalTextHeight / 2) - (textLineHeight / 2);
-        if (!img || !img.complete || img.naturalWidth === 0) {
-            textYStart = y - (totalTextHeight / 2) + (textLineHeight / 2);
-        }
-
-        lines.forEach((line, i) => {
-            ctx.fillText(line, x, textYStart + i * textLineHeight);
-        });
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 1;
-        
-        ctx.beginPath();
-        ctx.arc(x - width / 2, y, ANCHOR_RADIUS, 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.arc(x + width / 2, y, ANCHOR_RADIUS, 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.stroke();
-    }
-
-
     function renderGraphView() {
         if (typeof vis === 'undefined') {
             graphViewContainer.innerHTML = '<p style="color:var(--accent-danger);">Ошибка: Библиотека визуализации не загрузилась.</p>';
@@ -722,23 +662,6 @@
             return;
         }
         
-        const svgOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svgOverlay.style.position = 'absolute';
-        svgOverlay.style.top = '0';
-        svgOverlay.style.left = '0';
-        svgOverlay.style.width = '100%';
-        svgOverlay.style.height = '100%';
-        svgOverlay.style.pointerEvents = 'none';
-        svgOverlay.style.zIndex = '10';
-        graphViewContainer.appendChild(svgOverlay);
-
-        const tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        tempLine.setAttribute('stroke', 'var(--accent-secondary)');
-        tempLine.setAttribute('stroke-width', '3');
-        tempLine.setAttribute('stroke-dasharray', '5,5');
-        tempLine.style.display = 'none';
-        svgOverlay.appendChild(tempLine);
-
         const nodesData = [];
         const imageLoadPromises = [];
         imageCache = {};
@@ -776,7 +699,7 @@
                 nodesData.push({
                     id: task.id,
                     label: label,
-                    title: getTaskTextContent(task.content).substring(0, 100) + '...', 
+                    title: getTaskTextContent(task.content), 
                     color: { background: color, border: '#2c3e50', highlight: { background: '#4a627a', border: '#ecf0f1' }, hover: { background: color, border: '#ecf0f1' } },
                     widthConstraint: { minimum: width, maximum: width }, 
                     heightConstraint: { minimum: height, maximum: height }, 
@@ -793,16 +716,24 @@
 
             const options = {
                 nodes: {
-                    shape: 'custom',
-                    ctxRenderer: drawNodeWithAnchors,
+                    shape: 'box',
+                    shapeProperties: {
+                        borderRadius: 8 // Скругляем края
+                    },
                     font: { color: '#ecf0f1', size: parseInt(FONT_STYLE), face: FONT_STYLE.split(' ')[1], align: 'center' },
-                    shapeProperties: { borderRadius: 6 },
+                    shadow: {
+                        enabled: true,
+                        color: 'rgba(0,0,0,0.5)',
+                        size: 10,
+                        x: 5,
+                        y: 5
+                    }
                 },
                 edges: {
-                    color: { color: 'rgba(236, 240, 241, 0.5)', highlight: 'var(--accent-secondary)', hover: 'var(--accent-primary)' },
-                    width: 2,
+                    color: { color: 'rgba(236, 240, 241, 0.7)', highlight: 'var(--accent-secondary)', hover: 'var(--accent-primary)' },
+                    width: 3,
                     arrows: 'to',
-                    smooth: { type: 'cubicBezier', forceDirection: 'horizontal', roundness: 0.4 }
+                    smooth: { type: 'cubicBezier', forceDirection: 'horizontal', roundness: 0.6 }
                 },
                  physics: {
                     solver: 'forceAtlas2Based',
@@ -817,88 +748,155 @@
             if (network) network.destroy();
             network = new vis.Network(graphViewContainer, data, options);
             
+            let hoveredAnchor = null;
             let isDrawingEdge = false;
             let sourceNodeId = null;
             const canvas = graphViewContainer.querySelector('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // --- Drawing Anchors and Dragging Line ---
+            network.on("beforeDrawing", function (ctx) {
+                if (isDrawingEdge && sourceNodeId) {
+                    const fromNode = nodes.get(sourceNodeId);
+                    const fromPos = network.getPositions([sourceNodeId])[sourceNodeId];
+                    const fromX = fromPos.x + fromNode.width / 2;
+                    const fromY = fromPos.y;
 
-            function getAnchorPosition(nodeId, type) {
-                const nodePositions = network.getPositions([nodeId]);
-                const nodeX = nodePositions[nodeId].x;
-                const nodeY = nodePositions[nodeId].y;
-                const nodeData = nodes.get(nodeId);
-                const nodeWidth = nodeData.width; 
-                
-                if (type === 'input') {
-                    return { x: nodeX - nodeWidth / 2, y: nodeY };
-                } else if (type === 'output') {
-                    return { x: nodeX + nodeWidth / 2, y: nodeY };
+                    const mousePos = network.DOMtoCanvas({x: lastMousePos.x, y: lastMousePos.y});
+
+                    ctx.beginPath();
+                    ctx.moveTo(fromX, fromY);
+                    
+                    // Рисуем красивую кривую Безье
+                    const c1x = fromX + (mousePos.x - fromX) * 0.5;
+                    const c1y = fromY;
+                    const c2x = fromX + (mousePos.x - fromX) * 0.5;
+                    const c2y = mousePos.y;
+
+                    ctx.bezierCurveTo(c1x, c1y, c2x, c2y, mousePos.x, mousePos.y);
+
+                    ctx.strokeStyle = 'var(--accent-secondary)';
+                    ctx.lineWidth = 3;
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.setLineDash([]); // Reset for other drawings
                 }
-                return null;
-            }
-
-            function isNearAnchor(domPos, nodeCanvasPosition, nodeData, anchorType) {
-                const anchorPos = (anchorType === 'input') 
-                    ? { x: nodeCanvasPosition.x - nodeData.width / 2, y: nodeCanvasPosition.y }
-                    : { x: nodeCanvasPosition.x + nodeData.width / 2, y: nodeCanvasPosition.y };
+            });
+            
+            network.on("afterDrawing", function (ctx) {
+                const nodeIds = nodes.getIds();
+                const positions = network.getPositions(nodeIds);
                 
-                const domAnchorPos = network.canvasToDOM(anchorPos);
-                const distance = Math.hypot(domPos.x - domAnchorPos.x, domPos.y - domAnchorPos.y);
-                return distance < ANCHOR_RADIUS * 2;
+                nodeIds.forEach(nodeId => {
+                    const node = nodes.get(nodeId);
+                    const pos = positions[nodeId];
+                    const width = node.width;
+
+                    // --- Draw Left Anchor ---
+                    const isHoveredInput = hoveredAnchor && hoveredAnchor.nodeId === nodeId && hoveredAnchor.anchor === 'input';
+                    let gradInput = ctx.createRadialGradient(pos.x - width / 2, pos.y, 1, pos.x - width / 2, pos.y, ANCHOR_RADIUS);
+                    gradInput.addColorStop(0, isHoveredInput ? '#fff' : '#ddd');
+                    gradInput.addColorStop(1, isHoveredInput ? '#aaa' : '#888');
+                    
+                    ctx.beginPath();
+                    ctx.fillStyle = gradInput;
+                    ctx.arc(pos.x - width / 2, pos.y, ANCHOR_RADIUS, 0, 2 * Math.PI);
+                    ctx.fill();
+                    if(isHoveredInput) {
+                        ctx.strokeStyle = 'var(--accent-primary)';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                    }
+
+                    // --- Draw Right Anchor ---
+                    const isHoveredOutput = hoveredAnchor && hoveredAnchor.nodeId === nodeId && hoveredAnchor.anchor === 'output';
+                    let gradOutput = ctx.createRadialGradient(pos.x + width / 2, pos.y, 1, pos.x + width / 2, pos.y, ANCHOR_RADIUS);
+                    gradOutput.addColorStop(0, isHoveredOutput ? '#fff' : '#ddd');
+                    gradOutput.addColorStop(1, isHoveredOutput ? '#aaa' : '#888');
+
+                    ctx.beginPath();
+                    ctx.fillStyle = gradOutput;
+                    ctx.arc(pos.x + width / 2, pos.y, ANCHOR_RADIUS, 0, 2 * Math.PI);
+                    ctx.fill();
+                    if(isHoveredOutput) {
+                        ctx.strokeStyle = 'var(--accent-secondary)';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                    }
+                });
+            });
+
+            // --- Interaction Logic ---
+            
+            function getAnchorAndNodeFromPosition(domPos) {
+                const nodeId = network.getNodeAt(domPos);
+                if (nodeId) {
+                    const node = nodes.get(nodeId);
+                    const nodeCanvasPosition = network.getPositions([nodeId])[nodeId];
+                    const nodeWidth = node.width;
+
+                    const leftAnchorPos = { x: nodeCanvasPosition.x - nodeWidth / 2, y: nodeCanvasPosition.y };
+                    const domLeftAnchorPos = network.canvasToDOM(leftAnchorPos);
+                    if (Math.hypot(domPos.x - domLeftAnchorPos.x, domPos.y - domLeftAnchorPos.y) < ANCHOR_RADIUS * 1.5) {
+                        return { nodeId, anchor: 'input' };
+                    }
+
+                    const rightAnchorPos = { x: nodeCanvasPosition.x + nodeWidth / 2, y: nodeCanvasPosition.y };
+                    const domRightAnchorPos = network.canvasToDOM(rightAnchorPos);
+                     if (Math.hypot(domPos.x - domRightAnchorPos.x, domPos.y - domRightAnchorPos.y) < ANCHOR_RADIUS * 1.5) {
+                        return { nodeId, anchor: 'output' };
+                    }
+                }
+                return { nodeId: null, anchor: null };
             }
 
-            canvas.addEventListener('mousedown', e => {
+            let lastMousePos = {x:0, y:0};
+            canvas.addEventListener('mousemove', e => {
                 const domPos = { x: e.offsetX, y: e.offsetY };
-                const nodeId = network.getNodeAt(domPos);
-
+                lastMousePos = domPos;
+                const { nodeId, anchor } = getAnchorAndNodeFromPosition(domPos);
+                
                 if (nodeId) {
-                    const nodeCanvasPosition = network.getPositions([nodeId])[nodeId];
-                    const nodeData = nodes.get(nodeId);
+                    hoveredAnchor = { nodeId, anchor };
+                    network.redraw();
+                } else if (hoveredAnchor) {
+                    hoveredAnchor = null;
+                    network.redraw();
+                }
 
-                    if (isNearAnchor(domPos, nodeCanvasPosition, nodeData, 'output')) {
-                        isDrawingEdge = true;
-                        sourceNodeId = nodeId;
-                        
-                        const startAnchor = getAnchorPosition(sourceNodeId, 'output');
-                        const startDomPos = network.canvasToDOM(startAnchor);
-
-                        tempLine.setAttribute('x1', startDomPos.x);
-                        tempLine.setAttribute('y1', startDomPos.y);
-                        tempLine.setAttribute('x2', domPos.x);
-                        tempLine.setAttribute('y2', domPos.y);
-                        tempLine.style.display = 'block';
-                        network.setOptions({ interaction: { dragNodes: false } }); 
-                    }
+                if (isDrawingEdge) {
+                    network.redraw(); // Redraw to show the dragging line
                 }
             });
 
-            canvas.addEventListener('mousemove', e => {
-                if (isDrawingEdge) {
-                    const domPos = { x: e.offsetX, y: e.offsetY };
-                    tempLine.setAttribute('x2', domPos.x);
-                    tempLine.setAttribute('y2', domPos.y);
+            canvas.addEventListener('mousedown', e => {
+                const domPos = { x: e.offsetX, y: e.offsetY };
+                const { nodeId, anchor } = getAnchorAndNodeFromPosition(domPos);
+
+                if (nodeId && anchor === 'output') {
+                    isDrawingEdge = true;
+                    sourceNodeId = nodeId;
+                    network.setOptions({ interaction: { dragNodes: false } }); 
                 }
             });
 
             canvas.addEventListener('mouseup', e => {
                 if (isDrawingEdge) {
                     const domPos = { x: e.offsetX, y: e.offsetY };
-                    const targetNodeId = network.getNodeAt(domPos);
-                    if (targetNodeId && targetNodeId !== sourceNodeId) {
-                        const nodeCanvasPosition = network.getPositions([targetNodeId])[targetNodeId];
-                        const nodeData = nodes.get(targetNodeId);
-                        if (isNearAnchor(domPos, nodeCanvasPosition, nodeData, 'input')) {
-                            const newEdge = { from: sourceNodeId, to: targetNodeId, id: generateId('edge') };
-                            try {
-                                edges.add(newEdge);
-                                if (!currentBoard.edges) currentBoard.edges = [];
-                                currentBoard.edges = edges.get();
-                                saveAllBoards();
-                            } catch (err) { console.error("Could not add edge:", err); }
-                        }
+                    const { nodeId: targetNodeId, anchor } = getAnchorAndNodeFromPosition(domPos);
+
+                    if (targetNodeId && targetNodeId !== sourceNodeId && anchor === 'input') {
+                        const newEdge = { from: sourceNodeId, to: targetNodeId, id: generateId('edge') };
+                        try {
+                            edges.add(newEdge);
+                            if (!currentBoard.edges) currentBoard.edges = [];
+                            currentBoard.edges = edges.get();
+                            saveAllBoards();
+                        } catch (err) { console.error("Could not add edge:", err); }
                     }
                     isDrawingEdge = false;
                     sourceNodeId = null;
-                    tempLine.style.display = 'none';
+                    network.redraw();
                     network.setOptions({ interaction: { dragNodes: true } }); 
                 }
             });
@@ -931,3 +929,4 @@
      
     initializeApp();
 })();
+
