@@ -574,15 +574,13 @@
         }
     }
     
-    // --- [REVISED] GRAPH VIEW LOGIC ---
-
-    const ANCHOR_RADIUS = 8;
-    const NODE_PADDING_X = 15; 
-    const NODE_PADDING_Y = 15; 
-    const FONT_STYLE = '16px Segoe UI';
-    const LINE_HEIGHT = 1.2;
-    const MAX_IMG_HEIGHT = 80;
-    const MIN_NODE_WIDTH = 150; 
+    // --- [REVISED & FIXED] GRAPH VIEW LOGIC ---
+    const NODE_PADDING_X = 25; 
+    const NODE_PADDING_Y = 20; 
+    const FONT_STYLE = "18px 'Segoe UI', 'Roboto', Arial, sans-serif";
+    const LINE_HEIGHT = 1.4;
+    const MAX_IMG_HEIGHT = 100;
+    const UNIFIED_NODE_WIDTH = 300; // Единая ширина для всех блоков
     const tempCanvasCtx = document.createElement('canvas').getContext('2d');
     
     function switchView(view) {
@@ -608,65 +606,163 @@
     function getTaskTextContent(htmlContent) {
          tempDivForNormalization.innerHTML = htmlContent;
          tempDivForNormalization.querySelectorAll('.image-container').forEach(el => el.remove());
-         return tempDivForNormalization.textContent || "";
+         return tempDivForNormalization.textContent.trim() || "";
     }
     
-    function formatLabelForGraph(htmlContent, maxLen = 25) {
-        const str = getTaskTextContent(htmlContent).split('\n')[0].trim();
-        if (!str) return 'Untitled Task';
-        const words = str.split(' ');
+    function formatLabelForGraph(text, maxWidth) {
+        tempCanvasCtx.font = FONT_STYLE;
+        const words = text.split(' ');
         let currentLine = '';
         const lines = [];
         for (const word of words) {
-            if ((currentLine + ' ' + word).length > maxLen && currentLine.length > 0) {
+            const testLine = currentLine ? currentLine + ' ' + word : word;
+            const metrics = tempCanvasCtx.measureText(testLine);
+            if (metrics.width > maxWidth && currentLine.length > 0) {
                 lines.push(currentLine);
                 currentLine = word;
             } else {
-                currentLine = currentLine ? currentLine + ' ' + word : word;
+                currentLine = testLine;
             }
         }
         lines.push(currentLine);
-        return lines.join('\n');
+        return lines;
     }
 
-    function calculateNodeSize(label, image) {
+    function calculateNodeSize(lines, image) {
         tempCanvasCtx.font = FONT_STYLE;
-        const lines = label.split('\n');
-        const textMetrics = lines.map(line => tempCanvasCtx.measureText(line));
-        const textWidth = Math.max(MIN_NODE_WIDTH, ...textMetrics.map(m => m.width));
         const textHeight = lines.length * parseInt(FONT_STYLE) * LINE_HEIGHT;
 
         let imagePartHeight = 0;
         if (image && image.complete && image.naturalWidth > 0) {
-            const imagePadding = 8;
-            const scale = Math.min((textWidth + NODE_PADDING_X * 2) / image.naturalWidth, MAX_IMG_HEIGHT / image.naturalHeight);
+            const imagePadding = 10;
+            const availableWidth = UNIFIED_NODE_WIDTH - 2 * NODE_PADDING_X;
+            const scale = Math.min(availableWidth / image.naturalWidth, MAX_IMG_HEIGHT / image.naturalHeight);
             imagePartHeight = image.naturalHeight * scale + imagePadding;
         }
-
+        
         return {
-            width: textWidth + 2 * NODE_PADDING_X,
+            width: UNIFIED_NODE_WIDTH,
             height: textHeight + imagePartHeight + 2 * NODE_PADDING_Y
         };
     }
+    
+    function drawRoundRect(ctx, x, y, width, height, radius) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.arcTo(x + width, y, x + width, y + radius, radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.arcTo(x + width, y + height, x + width - radius, y + height, radius);
+        ctx.lineTo(x + radius, y + height);
+        ctx.arcTo(x, y + height, x, y + height - radius, radius);
+        ctx.lineTo(x, y + radius);
+        ctx.arcTo(x, y, x + radius, y, radius);
+        ctx.closePath();
+    }
+    
+    function generateNodeImage(nodeData, image) {
+        const { lines, color } = nodeData;
+        const { width, height } = calculateNodeSize(lines, image);
 
-    function renderGraphView() {
+        const canvas = document.createElement('canvas');
+        const scale = 3;
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(scale, scale);
+
+        const borderRadius = 12;
+
+        ctx.shadowColor = 'rgba(0,0,0,0.4)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetX = 3;
+        ctx.shadowOffsetY = 3;
+        
+        drawRoundRect(ctx, 0, 0, width, height, borderRadius);
+        ctx.fillStyle = 'rgba(0,0,0,0)';
+        ctx.fill();
+
+        ctx.shadowColor = 'transparent';
+        
+        const gradient = ctx.createLinearGradient(0, 0, width, height);
+        const bgColor = color.background || '#3498db';
+        gradient.addColorStop(0, bgColor);
+        
+        const r = parseInt(bgColor.slice(1, 3), 16), g = parseInt(bgColor.slice(3, 5), 16), b = parseInt(bgColor.slice(5, 7), 16);
+        const darkerColor = `rgb(${Math.max(0, r-30)}, ${Math.max(0, g-30)}, ${Math.max(0, b-30)})`;
+        gradient.addColorStop(1, darkerColor);
+        
+        ctx.fillStyle = gradient;
+        drawRoundRect(ctx, 0, 0, width, height, borderRadius);
+        ctx.fill();
+        
+        let imagePartHeight = 0;
+        if (image && image.complete && image.naturalWidth > 0) {
+            const imgPadding = 10;
+            const availableWidth = width - 2 * NODE_PADDING_X;
+            const scaleFactor = Math.min(availableWidth / image.naturalWidth, MAX_IMG_HEIGHT / image.naturalHeight);
+            imagePartHeight = image.naturalHeight * scaleFactor + imgPadding;
+        }
+
+        const textLines = lines || [];
+        const lineHeight = parseInt(FONT_STYLE) * LINE_HEIGHT;
+        const totalTextHeight = textLines.length * lineHeight;
+        const totalContentHeight = imagePartHeight + totalTextHeight;
+
+        let currentY = (height - totalContentHeight) / 2;
+
+        if (imagePartHeight > 0) {
+            const imgHeight = imagePartHeight - 10;
+            const imgWidth = image.naturalWidth * (imgHeight / image.naturalHeight);
+            const imgX = (width - imgWidth) / 2;
+            const imgY = currentY;
+
+            ctx.save();
+            drawRoundRect(ctx, imgX, imgY, imgWidth, imgHeight, 8);
+            ctx.clip();
+            ctx.drawImage(image, imgX, imgY, imgWidth, imgHeight);
+            ctx.restore();
+            
+            currentY += imagePartHeight;
+        }
+        
+        ctx.font = FONT_STYLE;
+        ctx.fillStyle = '#ecf0f1';
+        ctx.textAlign = 'left'; 
+        ctx.textBaseline = 'middle';
+        
+        currentY += totalTextHeight / 2;
+        if (imagePartHeight > 0) currentY -= lineHeight / 4;
+
+        const textStartX = NODE_PADDING_X;
+        const availableTextWidth = width - (NODE_PADDING_X * 2);
+
+        textLines.forEach((line, index) => {
+            const lineY = currentY - (totalTextHeight/2) + (index * lineHeight) + (lineHeight/2);
+            const words = line.split(' ');
+            if (words.length > 1 && index < textLines.length - 1) { // Justify all lines except the last one
+                ctx.textAlign = 'justify';
+                ctx.fillText(line, textStartX, lineY, availableTextWidth);
+            } else {
+                ctx.textAlign = 'left';
+                ctx.fillText(line, textStartX, lineY);
+            }
+        });
+
+        return canvas.toDataURL();
+    }
+
+
+    async function renderGraphView() {
         if (typeof vis === 'undefined') {
             graphViewContainer.innerHTML = '<p style="color:var(--accent-danger);">Ошибка: Библиотека визуализации не загрузилась.</p>';
             return;
         }
 
-        graphViewContainer.innerHTML = ''; 
+        graphViewContainer.innerHTML = '<div class="spinner-overlay"><div class="spinner"></div></div>'; 
         const currentBoard = allBoardsData[activeBoardId];
-        if (!currentBoard || !currentBoard.columns) {
-            graphViewContainer.innerHTML = '<p style="padding: 2rem; color: var(--text-secondary);">Нет данных для построения графа.</p>';
-            return;
-        }
-        
-        const nodesData = [];
-        const imageLoadPromises = [];
-        imageCache = {};
         const columnColors = ['#3498db', '#f39c12', '#2ecc71', '#9b59b6', '#e74c3c', '#1abc9c'];
-
+        
         const rawTasks = [];
         (currentBoard.columns || []).forEach((column, index) => {
             const color = columnColors[index % columnColors.length];
@@ -674,248 +770,252 @@
                 rawTasks.push({ task, color });
             });
         });
+        
+        if (!currentBoard || !currentBoard.columns || rawTasks.length === 0) {
+            graphViewContainer.innerHTML = '<p style="padding: 2rem; color: var(--text-secondary);">Нет задач для построения графа.</p>';
+            return;
+        }
+        
+        const nodesData = [];
+        const imageLoadPromises = [];
+        imageCache = {};
 
-        rawTasks.forEach(({ task, color }) => {
+        for (const { task, color } of rawTasks) {
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = task.content;
             const imgEl = tempDiv.querySelector('img');
             
-            let imagePromise = Promise.resolve();
             let img = null;
             if (imgEl && imgEl.src) {
                 img = new Image();
-                imagePromise = new Promise((resolve) => {
+                img.crossOrigin = "Anonymous"; 
+                const promise = new Promise((resolve) => {
                     img.onload = resolve;
-                    img.onerror = resolve; 
+                    img.onerror = () => {
+                        console.warn(`Could not load image for task ${task.id}: ${imgEl.src}`);
+                        resolve(); 
+                    };
                 });
                 img.src = imgEl.src;
+                imageLoadPromises.push(promise);
             }
             imageCache[task.id] = img; 
-            imageLoadPromises.push(imagePromise);
 
-            imagePromise.then(() => {
-                const label = formatLabelForGraph(task.content);
-                const { width, height } = calculateNodeSize(label, imageCache[task.id]);
-                nodesData.push({
-                    id: task.id,
-                    label: label,
-                    title: getTaskTextContent(task.content), 
-                    color: { background: color, border: '#2c3e50', highlight: { background: '#4a627a', border: '#ecf0f1' }, hover: { background: color, border: '#ecf0f1' } },
-                    widthConstraint: { minimum: width, maximum: width }, 
-                    heightConstraint: { minimum: height, maximum: height }, 
-                    width: width, 
-                    height: height,
-                });
+            const textContent = getTaskTextContent(task.content) || "Без названия";
+            const lines = formatLabelForGraph(textContent, UNIFIED_NODE_WIDTH - 2 * NODE_PADDING_X);
+            
+            nodesData.push({
+                id: task.id,
+                title: textContent, 
+                color: { background: color },
+                lines: lines 
+            });
+        }
+        
+        await Promise.all(imageLoadPromises);
+        
+        const spinner = graphViewContainer.querySelector('.spinner-overlay');
+        if (spinner) spinner.remove();
+
+        nodesData.forEach(node => {
+            const image = imageCache[node.id];
+            const { width, height } = calculateNodeSize(node.lines, image);
+            
+            node.shape = 'image';
+            node.image = generateNodeImage(node, image);
+            node.label = '';
+            
+            node.width = width;
+            node.height = height;
+        });
+
+        const nodes = new vis.DataSet(nodesData);
+        const edges = new vis.DataSet(currentBoard.edges || []);
+        const data = { nodes, edges };
+
+        const options = {
+            edges: {
+                color: { color: 'rgba(236, 240, 241, 0.7)', highlight: 'var(--accent-secondary)', hover: 'var(--accent-primary)' },
+                width: 3,
+                arrows: 'to',
+                smooth: { type: 'cubicBezier', forceDirection: 'horizontal', roundness: 0.6 }
+            },
+            physics: {
+                enabled: true, // Включаем физику для начального рендеринга
+                solver: 'forceAtlas2Based',
+                forceAtlas2Based: { gravitationalConstant: -150, centralGravity: 0.005, springLength: 400, springConstant: 0.1, damping: 0.8 },
+                minVelocity: 0.75,
+                stabilization: { iterations: 200 } // Увеличиваем итерации для лучшего начального расположения
+            },
+            interaction: { dragNodes: true, dragView: true, zoomView: true, tooltipDelay: 200, hover: true },
+            manipulation: { enabled: false },
+        };
+
+        if (network) network.destroy();
+        network = new vis.Network(graphViewContainer, data, options);
+        
+        // Отключаем физику после стабилизации, чтобы сохранить позиции
+        network.on("stabilizationIterationsDone", function () {
+            network.setOptions( { physics: false } );
+        });
+        
+        let hoveredAnchor = null;
+        let isDrawingEdge = false;
+        let sourceNodeId = null;
+        const canvas = graphViewContainer.querySelector('canvas');
+        
+        network.on("beforeDrawing", function (ctx) {
+            if (isDrawingEdge && sourceNodeId) {
+                const fromNode = nodes.get(sourceNodeId);
+                const fromPos = network.getPositions([sourceNodeId])[sourceNodeId];
+                const fromX = fromPos.x + fromNode.width / 2;
+                const fromY = fromPos.y;
+
+                const mousePos = network.DOMtoCanvas({x: lastMousePos.x, y: lastMousePos.y});
+
+                ctx.beginPath();
+                ctx.moveTo(fromX, fromY);
+                
+                const c1x = fromX + (mousePos.x - fromX) * 0.5;
+                const c1y = fromY;
+                const c2x = fromX + (mousePos.x - fromX) * 0.5;
+                const c2y = mousePos.y;
+
+                ctx.bezierCurveTo(c1x, c1y, c2x, c2y, mousePos.x, mousePos.y);
+
+                ctx.strokeStyle = 'var(--accent-secondary)';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        });
+        
+        network.on("afterDrawing", function (ctx) {
+            const nodeIds = nodes.getIds();
+            const positions = network.getPositions(nodeIds);
+            
+            nodeIds.forEach(nodeId => {
+                const node = nodes.get(nodeId);
+                if(!node || !node.width) return;
+                const pos = positions[nodeId];
+                const width = node.width;
+                const dynamicRadius = Math.max(8, Math.min(15, node.height * 0.1));
+
+                const isHoveredInput = hoveredAnchor && hoveredAnchor.nodeId === nodeId && hoveredAnchor.anchor === 'input';
+                ctx.beginPath();
+                ctx.fillStyle = isHoveredInput ? '#5dade2' : '#3498db'; // Якорь входа
+                ctx.arc(pos.x - width / 2, pos.y, dynamicRadius, 0, 2 * Math.PI);
+                ctx.fill();
+                if(isHoveredInput) {
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                const isHoveredOutput = hoveredAnchor && hoveredAnchor.nodeId === nodeId && hoveredAnchor.anchor === 'output';
+                ctx.beginPath();
+                ctx.fillStyle = isHoveredOutput ? '#58d68d' : '#2ecc71'; // Якорь выхода
+                ctx.arc(pos.x + width / 2, pos.y, dynamicRadius, 0, 2 * Math.PI);
+                ctx.fill();
+                if(isHoveredOutput) {
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
             });
         });
         
-        Promise.all(imageLoadPromises).then(() => {
-            const nodes = new vis.DataSet(nodesData);
-            const edges = new vis.DataSet(currentBoard.edges || []);
-            const data = { nodes, edges };
+        function getAnchorAndNodeFromPosition(domPos) {
+            const canvasPos = network.DOMtoCanvas(domPos);
+            const nodeIds = nodes.getIds();
+            for (const nodeId of nodeIds) {
+                const node = nodes.get(nodeId);
+                if(!node) continue;
+                const nodeCanvasPosition = network.getPositions([nodeId])[nodeId];
+                const nodeWidth = node.width;
+                const dynamicRadius = Math.max(8, Math.min(15, node.height * 0.1));
 
-            const options = {
-                nodes: {
-                    shape: 'box',
-                    shapeProperties: {
-                        borderRadius: 8 // Скругляем края
-                    },
-                    font: { color: '#ecf0f1', size: parseInt(FONT_STYLE), face: FONT_STYLE.split(' ')[1], align: 'center' },
-                    shadow: {
-                        enabled: true,
-                        color: 'rgba(0,0,0,0.5)',
-                        size: 10,
-                        x: 5,
-                        y: 5
-                    }
-                },
-                edges: {
-                    color: { color: 'rgba(236, 240, 241, 0.7)', highlight: 'var(--accent-secondary)', hover: 'var(--accent-primary)' },
-                    width: 3,
-                    arrows: 'to',
-                    smooth: { type: 'cubicBezier', forceDirection: 'horizontal', roundness: 0.6 }
-                },
-                 physics: {
-                    solver: 'forceAtlas2Based',
-                    forceAtlas2Based: { gravitationalConstant: -150, centralGravity: 0.005, springLength: 200, springConstant: 0.05, damping: 0.7 },
-                    minVelocity: 0.75,
-                    stabilization: { iterations: 150 }
-                },
-                interaction: { dragNodes: true, dragView: true, zoomView: true, tooltipDelay: 200, hover: true },
-                manipulation: { enabled: false },
-            };
-
-            if (network) network.destroy();
-            network = new vis.Network(graphViewContainer, data, options);
-            
-            let hoveredAnchor = null;
-            let isDrawingEdge = false;
-            let sourceNodeId = null;
-            const canvas = graphViewContainer.querySelector('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            // --- Drawing Anchors and Dragging Line ---
-            network.on("beforeDrawing", function (ctx) {
-                if (isDrawingEdge && sourceNodeId) {
-                    const fromNode = nodes.get(sourceNodeId);
-                    const fromPos = network.getPositions([sourceNodeId])[sourceNodeId];
-                    const fromX = fromPos.x + fromNode.width / 2;
-                    const fromY = fromPos.y;
-
-                    const mousePos = network.DOMtoCanvas({x: lastMousePos.x, y: lastMousePos.y});
-
-                    ctx.beginPath();
-                    ctx.moveTo(fromX, fromY);
-                    
-                    // Рисуем красивую кривую Безье
-                    const c1x = fromX + (mousePos.x - fromX) * 0.5;
-                    const c1y = fromY;
-                    const c2x = fromX + (mousePos.x - fromX) * 0.5;
-                    const c2y = mousePos.y;
-
-                    ctx.bezierCurveTo(c1x, c1y, c2x, c2y, mousePos.x, mousePos.y);
-
-                    ctx.strokeStyle = 'var(--accent-secondary)';
-                    ctx.lineWidth = 3;
-                    ctx.setLineDash([5, 5]);
-                    ctx.stroke();
-                    ctx.setLineDash([]); // Reset for other drawings
+                const leftAnchorPos = { x: nodeCanvasPosition.x - nodeWidth / 2, y: nodeCanvasPosition.y };
+                if (Math.hypot(canvasPos.x - leftAnchorPos.x, canvasPos.y - leftAnchorPos.y) < dynamicRadius * 1.5) {
+                    return { nodeId, anchor: 'input' };
                 }
-            });
-            
-            network.on("afterDrawing", function (ctx) {
-                const nodeIds = nodes.getIds();
-                const positions = network.getPositions(nodeIds);
-                
-                nodeIds.forEach(nodeId => {
-                    const node = nodes.get(nodeId);
-                    const pos = positions[nodeId];
-                    const width = node.width;
 
-                    // --- Draw Left Anchor ---
-                    const isHoveredInput = hoveredAnchor && hoveredAnchor.nodeId === nodeId && hoveredAnchor.anchor === 'input';
-                    let gradInput = ctx.createRadialGradient(pos.x - width / 2, pos.y, 1, pos.x - width / 2, pos.y, ANCHOR_RADIUS);
-                    gradInput.addColorStop(0, isHoveredInput ? '#fff' : '#ddd');
-                    gradInput.addColorStop(1, isHoveredInput ? '#aaa' : '#888');
-                    
-                    ctx.beginPath();
-                    ctx.fillStyle = gradInput;
-                    ctx.arc(pos.x - width / 2, pos.y, ANCHOR_RADIUS, 0, 2 * Math.PI);
-                    ctx.fill();
-                    if(isHoveredInput) {
-                        ctx.strokeStyle = 'var(--accent-primary)';
-                        ctx.lineWidth = 2;
-                        ctx.stroke();
-                    }
-
-                    // --- Draw Right Anchor ---
-                    const isHoveredOutput = hoveredAnchor && hoveredAnchor.nodeId === nodeId && hoveredAnchor.anchor === 'output';
-                    let gradOutput = ctx.createRadialGradient(pos.x + width / 2, pos.y, 1, pos.x + width / 2, pos.y, ANCHOR_RADIUS);
-                    gradOutput.addColorStop(0, isHoveredOutput ? '#fff' : '#ddd');
-                    gradOutput.addColorStop(1, isHoveredOutput ? '#aaa' : '#888');
-
-                    ctx.beginPath();
-                    ctx.fillStyle = gradOutput;
-                    ctx.arc(pos.x + width / 2, pos.y, ANCHOR_RADIUS, 0, 2 * Math.PI);
-                    ctx.fill();
-                    if(isHoveredOutput) {
-                        ctx.strokeStyle = 'var(--accent-secondary)';
-                        ctx.lineWidth = 2;
-                        ctx.stroke();
-                    }
-                });
-            });
-
-            // --- Interaction Logic ---
-            
-            function getAnchorAndNodeFromPosition(domPos) {
-                const nodeId = network.getNodeAt(domPos);
-                if (nodeId) {
-                    const node = nodes.get(nodeId);
-                    const nodeCanvasPosition = network.getPositions([nodeId])[nodeId];
-                    const nodeWidth = node.width;
-
-                    const leftAnchorPos = { x: nodeCanvasPosition.x - nodeWidth / 2, y: nodeCanvasPosition.y };
-                    const domLeftAnchorPos = network.canvasToDOM(leftAnchorPos);
-                    if (Math.hypot(domPos.x - domLeftAnchorPos.x, domPos.y - domLeftAnchorPos.y) < ANCHOR_RADIUS * 1.5) {
-                        return { nodeId, anchor: 'input' };
-                    }
-
-                    const rightAnchorPos = { x: nodeCanvasPosition.x + nodeWidth / 2, y: nodeCanvasPosition.y };
-                    const domRightAnchorPos = network.canvasToDOM(rightAnchorPos);
-                     if (Math.hypot(domPos.x - domRightAnchorPos.x, domPos.y - domRightAnchorPos.y) < ANCHOR_RADIUS * 1.5) {
-                        return { nodeId, anchor: 'output' };
-                    }
+                const rightAnchorPos = { x: nodeCanvasPosition.x + nodeWidth / 2, y: nodeCanvasPosition.y };
+                if (Math.hypot(canvasPos.x - rightAnchorPos.x, canvasPos.y - rightAnchorPos.y) < dynamicRadius * 1.5) {
+                    return { nodeId, anchor: 'output' };
                 }
-                return { nodeId: null, anchor: null };
+            }
+            return { nodeId: null, anchor: null };
+        }
+
+        let lastMousePos = {x:0, y:0};
+        canvas.addEventListener('mousemove', e => {
+            const domPos = { x: e.offsetX, y: e.offsetY };
+            lastMousePos = domPos;
+            const { nodeId, anchor } = getAnchorAndNodeFromPosition(domPos);
+            
+            const newHoveredAnchor = nodeId ? { nodeId, anchor } : null;
+
+            if (JSON.stringify(hoveredAnchor) !== JSON.stringify(newHoveredAnchor)) {
+                hoveredAnchor = newHoveredAnchor;
+                network.redraw();
             }
 
-            let lastMousePos = {x:0, y:0};
-            canvas.addEventListener('mousemove', e => {
-                const domPos = { x: e.offsetX, y: e.offsetY };
-                lastMousePos = domPos;
-                const { nodeId, anchor } = getAnchorAndNodeFromPosition(domPos);
-                
-                if (nodeId) {
-                    hoveredAnchor = { nodeId, anchor };
-                    network.redraw();
-                } else if (hoveredAnchor) {
-                    hoveredAnchor = null;
-                    network.redraw();
-                }
+            if (isDrawingEdge) {
+                network.redraw();
+            }
+        });
 
-                if (isDrawingEdge) {
-                    network.redraw(); // Redraw to show the dragging line
-                }
-            });
+        canvas.addEventListener('mousedown', e => {
+            if (e.button !== 0) return;
+            const domPos = { x: e.offsetX, y: e.offsetY };
+            const { nodeId, anchor } = getAnchorAndNodeFromPosition(domPos);
 
-            canvas.addEventListener('mousedown', e => {
-                const domPos = { x: e.offsetX, y: e.offsetY };
-                const { nodeId, anchor } = getAnchorAndNodeFromPosition(domPos);
-
-                if (nodeId && anchor === 'output') {
+            if (nodeId && anchor) {
+                e.stopPropagation();
+                if (anchor === 'output') {
                     isDrawingEdge = true;
                     sourceNodeId = nodeId;
-                    network.setOptions({ interaction: { dragNodes: false } }); 
+                    network.setOptions({ interaction: { dragNodes: false, dragView: false } }); 
                 }
-            });
+            }
+        });
 
-            canvas.addEventListener('mouseup', e => {
-                if (isDrawingEdge) {
-                    const domPos = { x: e.offsetX, y: e.offsetY };
-                    const { nodeId: targetNodeId, anchor } = getAnchorAndNodeFromPosition(domPos);
+        canvas.addEventListener('mouseup', e => {
+            if (isDrawingEdge) {
+                 const domPos = { x: e.offsetX, y: e.offsetY };
+                const { nodeId: targetNodeId, anchor } = getAnchorAndNodeFromPosition(domPos);
 
-                    if (targetNodeId && targetNodeId !== sourceNodeId && anchor === 'input') {
-                        const newEdge = { from: sourceNodeId, to: targetNodeId, id: generateId('edge') };
-                        try {
-                            edges.add(newEdge);
-                            if (!currentBoard.edges) currentBoard.edges = [];
-                            currentBoard.edges = edges.get();
-                            saveAllBoards();
-                        } catch (err) { console.error("Could not add edge:", err); }
-                    }
-                    isDrawingEdge = false;
-                    sourceNodeId = null;
-                    network.redraw();
-                    network.setOptions({ interaction: { dragNodes: true } }); 
-                }
-            });
-
-
-            const handleDeletion = (e) => {
-                if(currentView !== 'graph') return;
-                if (e.key === 'Delete' || e.key === 'Backspace') {
-                    const selection = network.getSelection();
-                    if (selection.edges.length > 0) {
-                        edges.remove(selection.edges);
+                if (targetNodeId && targetNodeId !== sourceNodeId && anchor === 'input') {
+                    const newEdge = { from: sourceNodeId, to: targetNodeId, id: generateId('edge') };
+                    try {
+                        edges.add(newEdge);
+                        if (!currentBoard.edges) currentBoard.edges = [];
                         currentBoard.edges = edges.get();
                         saveAllBoards();
-                    }
+                    } catch (err) { console.error("Could not add edge:", err); }
                 }
-            };
-            window.removeEventListener('keydown', handleDeletion); 
-            window.addEventListener('keydown', handleDeletion);
+                isDrawingEdge = false;
+                sourceNodeId = null;
+                network.redraw();
+                network.setOptions({ interaction: { dragNodes: true, dragView: true } }); 
+            }
         });
+
+        const handleDeletion = (e) => {
+            if(currentView !== 'graph') return;
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                const selection = network.getSelection();
+                if (selection.edges.length > 0) {
+                    edges.remove(selection.edges);
+                    currentBoard.edges = edges.get();
+                    saveAllBoards();
+                }
+            }
+        };
+        window.removeEventListener('keydown', handleDeletion); 
+        window.addEventListener('keydown', handleDeletion);
     }
 
     function initializeApp() {
