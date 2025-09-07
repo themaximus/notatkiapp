@@ -347,14 +347,33 @@ input[type="checkbox"] {
     cursor: not-allowed;
     opacity: 0.6;
 }
+
 .spinner {
-    width: 12px;
-    height: 12px;
-    border: 2px solid currentColor;
+    width: 24px;
+    height: 24px;
+    border: 3px solid var(--accent-primary);
     border-right-color: transparent;
     border-radius: 50%;
     animation: spinner-rotation 1s linear infinite;
 }
+
+/* NEW: Spinner for graph loading */
+.spinner-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(44, 62, 80, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+}
+.spinner-overlay .spinner {
+    width: 50px;
+    height: 50px;
+}
+
+
 @keyframes spinner-rotation {
     to { transform: rotate(360deg); }
 }
@@ -378,12 +397,17 @@ input[type="checkbox"] {
 #graphViewContainer {
     width: 100%;
     height: 100%;
-    background-color: #282c34; /* Darker background */
-    background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.1) 1px, transparent 0);
+    background-color: #22272e; /* NEW: Darker background for better contrast */
+    background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.08) 1px, transparent 0);
     background-size: 25px 25px;
     display: none;
     position: relative;
+    cursor: grab;
 }
+#graphViewContainer:active {
+    cursor: grabbing;
+}
+
 
 /* Styles for the custom modal */
 .custom-modal-overlay {
