@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Умная Доска v6.6 - Раздельные файлы</title>
+    
+    <link rel="stylesheet" href="style.css">
+    <!-- ОБНОВЛЕНО: Ссылка на CSS для vis-network больше не требуется при использовании standalone версии -->
+</head>
+<body>
+
+    <div class="overlay" id="overlay"></div>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3>Мои Доски</h3>
+            <button id="closeSidebarBtn" class="btn-icon" title="Закрыть панель">&times;</button>
+        </div>
+        <ul id="boardList" class="board-list"></ul>
+        <div class="sidebar-footer">
+            <input type="text" id="newBoardNameInput" placeholder="Название новой доски...">
+            <button id="addBoardBtn" class="btn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z"></path></svg>
+                Создать Доску
+            </button>
+        </div>
+    </div>
+
+    <header>
+        <div class="header-left">
+            <div id="appTitleButton" class="app-title" title="Открыть список досок">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2h14c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2zM5 19V5h14l.002 14H5z"></path><path d="M7 7h10v2H7zm0 4h7v2H7z"></path></svg>
+                <span id="currentBoardTitle">Моя Умная Доска</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="view-switcher">
+                <button id="showBoardViewBtn" class="btn active" title="Вид доски">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M2.5 0A1.5 1.5 0 0 0 1 1.5v13A1.5 1.5 0 0 0 2.5 16h11a1.5 1.5 0 0 0 1.5-1.5v-13A1.5 1.5 0 0 0 13.5 0h-11zM2 1.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 .5.5v13a.5.5 0 0 1-.5-.5h-11a.5.5 0 0 1-.5-.5v-13z"/><path d="M5 3.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm0 2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm0 2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z"/></svg>
+                </button>
+                <button id="showGraphViewBtn" class="btn" title="Вид графа">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6 10.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm-2-4a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm-2-4a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
+                    <path d="M1.5 14a.5.5 0 0 0 .5.5h12a.5.5 0 0 0 0-1H2a.5.5 0 0 0-.5.5zM1 3.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zM1 7.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm0 4a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm13-8a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1 0-1h3a.5.5 0 0 1 .5.5zm0 4a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1 0-1h3a.5.5 0 0 1 .5.5zm0 4a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1 0-1h3a.5.5 0 0 1 .5.5z"/>
+                    </svg>
+                </button>
+            </div>
+            <button id="addColumnBtn" class="btn btn-add-column">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z"></path></svg>
+                Добавить колонку
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <div id="boardContainer" class="board"></div>
+        <div id="graphViewContainer"></div>
+    </main>
+
+    <div id="imageModal">
+        <span id="closeModalBtn">&times;</span>
+        <img src="" alt="Просмотр изображения" id="modalImage">
+    </div>
+
+    <div class="custom-modal-overlay" id="customModalOverlay">
+        <div class="custom-modal">
+            <div id="customModalContent" class="custom-modal-content"></div>
+            <div id="customModalButtons" class="custom-modal-buttons"></div>
+        </div>
+    </div>
+    
+    <!-- ОБНОВЛЕНО: Ссылка на последнюю standalone версию vis-network -->
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
